@@ -1,0 +1,3 @@
+[submodule "q2"]
+	path = q2
+	url = https://github.com/megbedell/q2.git
