@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(1,'/home/mbedell/python')
 import numpy as np
 from numpy import log, exp, pi, sqrt, sin, cos, tan, arctan
 from scipy.optimize import leastsq
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     jump_theta = np.array([8.0,0.08,0.05,0.08])
     n_theta = len(start_theta)
     n_walkers = 10
-    n_steps = 7 # for testing
+    n_steps = 10000
     verbose = False
     pos = [start_theta + np.random.randn(n_theta)*jump_theta for i in range(n_walkers)]
     sampler = emcee.EnsembleSampler(n_walkers, n_theta, mcmc.lnprob, args=[errors, star, ref], kwargs={"modatm":modatm, "verbose":verbose}, threads=2)
@@ -76,8 +78,8 @@ if __name__ == "__main__":
     # save abundances:
     print "Calculating abundances..."
     start_time = time.time()
-    #post = posterior.make_posterior(star,sampler,ref=ref, modatm=modatm)
-    post = posterior.make_posterior(star,sampler,ref=ref, n_burn=1, n_thin=2, modatm=modatm) #for testing
+    post = posterior.make_posterior(star,sampler,ref=ref, modatm=modatm)
+    #post = posterior.make_posterior(star,sampler,ref=ref, n_burn=1, n_thin=2, modatm=modatm) #for testing
     print 'Abundances took {0:.2f} minutes'.format((time.time()-start_time)/60.0)
     
     pdb.set_trace()
