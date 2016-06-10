@@ -4,7 +4,7 @@ from scipy.optimize import leastsq
 import matplotlib.pyplot as plt
 import pickle
 import pdb
-import triangle
+import corner
 import emcee
 import q2
 import copy
