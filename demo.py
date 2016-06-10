@@ -84,7 +84,8 @@ if __name__ == "__main__":
     
     pdb.set_trace()
 
-    pickle.dump(sampler,open('sampler_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
+    pickle.dump(sampler.chain,open('emceechain_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
+    pickle.dump(sampler.lnprobability,open('emceelike_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
     pickle.dump(post,open('posterior_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
     
     figure = corner.corner(samples, labels=["T$_{eff}$","log(g)","[Fe/H]","$v_t$"], show_titles=True)
