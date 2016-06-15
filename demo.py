@@ -17,10 +17,10 @@ import time
 
 if __name__ == "__main__":
 
-    starname = 'XO-2N'
-    refname = 'XO-2S'
+    starname = 'K11'
+    refname = 'Sun'
     modatm = 'odfnew'  # choose the model grid
-    data = q2.Data('XO2_stars.csv', 'XO2_lines.csv')
+    data = q2.Data('K11_solution.csv', 'K11_lines.csv')
     
     # set up star objects:
     star = q2.Star(starname)
@@ -30,11 +30,12 @@ if __name__ == "__main__":
 
     # solve for best-fit parameters:
     sp = q2.specpars.SolvePars()
-    sp.step_teff = 8
-    sp.step_logg = 0.08
-    sp.step_vt = 0.08
-    sp.niter = 35
+    sp.step_teff = 4
+    sp.step_logg = 0.04
+    sp.step_vt = 0.04
+    sp.niter = 100
     sp.grid = modatm
+    sp.errors = True
     q2.specpars.solve_one(star, sp, Ref=ref)
 
     print "Best-fit parameters:"
@@ -64,7 +65,7 @@ if __name__ == "__main__":
     print "Starting MCMC..."
     start_time = time.time()
     start_theta = np.array([star.teff, star.logg, star.feh, star.vt])
-    jump_theta = np.array([8.0,0.08,0.05,0.08])
+    jump_theta = np.array([8.0,0.04,0.03,0.04])
     n_theta = len(start_theta)
     n_walkers = 10
     n_steps = 10000
@@ -74,6 +75,10 @@ if __name__ == "__main__":
     sampler.run_mcmc(pos, n_steps)
     plt.clf()
     print 'MCMC took {0:.2f} minutes'.format((time.time()-start_time)/60.0)
+    print 'auto-correlation lengths:', sampler.acor
+    
+    pickle.dump(sampler.chain,open('emceechain_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
+    pickle.dump(sampler.lnprobability,open('emceelike_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
 
     # save abundances:
     print "Calculating abundances..."
@@ -82,13 +87,14 @@ if __name__ == "__main__":
     #post = posterior.make_posterior(star,sampler,ref=ref, n_burn=1, n_thin=2, modatm=modatm) #for testing
     print 'Abundances took {0:.2f} minutes'.format((time.time()-start_time)/60.0)
     
-    pdb.set_trace()
 
-    pickle.dump(sampler.chain,open('emceechain_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
-    pickle.dump(sampler.lnprobability,open('emceelike_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
     pickle.dump(post,open('posterior_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
     
+    n_burn = np.shape(sampler.chain)[1]/10  # default burn-in: 10% of chain length
+    samples = sampler.chain[:, n_burn:, :].reshape((-1, 4))
     figure = corner.corner(samples, labels=["T$_{eff}$","log(g)","[Fe/H]","$v_t$"], show_titles=True)
     figure.savefig('pairsplot_{0:s}-{1:s}.png'.format(starname, refname))
     figure.clear()
+    
+    pdb.set_trace()
   
