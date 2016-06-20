@@ -80,12 +80,19 @@ if __name__ == "__main__":
     pickle.dump(sampler.chain,open('emceechain_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
     pickle.dump(sampler.lnprobability,open('emceelike_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
 
+    post = posterior.make_posterior(star,sampler)
+    
     # save abundances:
     print "Calculating abundances..."
     start_time = time.time()
-    post = posterior.make_posterior(star,sampler,ref=ref, modatm=modatm)
-    #post = posterior.make_posterior(star,sampler,ref=ref, n_burn=1, n_thin=2, modatm=modatm) #for testing
+    p.calc_ab(modatm=modatm,ref=ref)
     print 'Abundances took {0:.2f} minutes'.format((time.time()-start_time)/60.0)
+    
+    # save isochrones:
+    print "Calculating isochrones..."
+    start_time = time.time()
+    p.calc_isochrone(feh_offset=-0.04) # offset improves solar age & mass values
+    print 'Isochrones took {0:.2f} minutes'.format((time.time()-start_time)/60.0)
     
 
     pickle.dump(post,open('posterior_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
