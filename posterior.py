@@ -20,34 +20,83 @@ class Posterior(q2.Star):
         self.name = StarObj.name
         self.linelist = StarObj.linelist
         
-    def save_step(self, param, modatm='odfnew', species_ids=None, ref=None):
-        if species_ids == None:
-            species_codes = sorted(set(self.linelist['species']))
-            species_ids = q2.abundances.getsp_ids(species_codes)
-        # do the MOOG calculation:
-        star2 = copy.copy(self)
-        [star2.teff, star2.logg, star2.feh, star2.vt] = param
-        star2.get_model_atmosphere(modatm)
-        q2.abundances.one(star2, Ref=ref, species_ids=species_ids, silent=True)
-        # save parameters:
-        for attr in ['teff','logg','feh','vt']:
-            new = getattr(star2, attr)
+    def save_step(self, param):
+        """Save parameters to the posterior object."""
+        for i,attr in enumerate(['teff','logg','feh','vt']):
+            new = param[i]
             saved = getattr(self, attr, None)
             if saved is None:
                 setattr(self, attr, new)
             else:
                 saved = np.vstack((saved, new))
                 setattr(self, attr, saved)
-        # save abundances:
-        for species_id in species_ids:
-            new = getattr(star2, species_id)
-            saved = getattr(self, species_id, None)
-            if saved is None:
-                setattr(self, species_id, new)
-            else:
-                saved['ab'] = np.vstack((saved['ab'],new['ab']))
-                saved['difab'] = np.vstack((saved['difab'],new['difab']))
         return True
+        
+    def calc_ab(self, modatm='odfnew', species_ids=None, ref=None):
+        if species_ids == None:
+            species_codes = sorted(set(self.linelist['species']))
+            species_ids = q2.abundances.getsp_ids(species_codes)
+        # loop through all of the parameters:
+        try:
+            all_par = zip(self.teff, self.logg, self.feh, self.vt)
+        except AttributeError:
+            print "cannot calculate abundances without stellar parameters"
+            return False
+        for param in all_par:
+            # do the MOOG calculation:
+            star2 = copy.copy(self)
+            star2.teff = param[0][0] # figure out a better way to do this later
+            star2.logg = param[1][0]
+            star2.feh = param[2][0]
+            star2.vt = param[3][0]
+            star2.get_model_atmosphere(modatm)
+            q2.abundances.one(star2, Ref=ref, species_ids=species_ids, silent=True)
+            for species_id in species_ids:
+                new = getattr(star2, species_id)
+                saved = getattr(self, species_id, None)
+                if saved is None:
+                    setattr(self, species_id, new)
+                else:
+                    saved['ab'] = np.vstack((saved['ab'],new['ab']))
+                    saved['difab'] = np.vstack((saved['difab'],new['difab']))
+        return True
+    
+    def calc_isochrone(self, isochrone_db='yy01.sql3', feh_offset = 0):
+        # set up isochrone solver:
+        sp = q2.isopars.SolvePars()
+        sp.db = isochrone_db
+        sp.key_parameter_known = 'logg'
+        sp.feh_offset = feh_offset  # optional offset to the isochrone tracks
+        pp = q2.isopars.PlotPars()
+        pp.make_figures = False   # don't generate any figures
+        # set errors:
+        star2 = copy.copy(self)
+        star2.err_teff = np.std(self.teff)
+        star2.err_logg = np.std(self.logg)
+        star2.err_feh = np.std(self.feh)
+        star2.err_vt = np.std(self.vt)
+        # loop through all of the parameters:
+        try:
+            all_par = zip(self.teff, self.logg, self.feh, self.vt)
+        except AttributeError:
+            print "cannot fit isochrone without stellar parameters"
+            return False
+        for param in all_par:
+            # do the isochrone fitting:
+            star2.teff = param[0][0] # figure out a better way to do this later
+            star2.logg = param[1][0]
+            star2.feh = param[2][0]
+            star2.vt = param[3][0]
+            q2.isopars.solve_one(star2, sp, PlotPars=pp, silent=True)
+            for output in ('isomass', 'isor', 'isoage', 'isomv', 'isologl'):
+                new = getattr(star2, output)['most_probable']
+                saved = getattr(self, output, None)
+                if saved is None:
+                    setattr(self, output, new)
+                else:
+                    saved = np.vstack((saved,new))
+        return True
+
 
 
 def make_posterior(star, sampler, modatm='odfnew', ref=None, n_burn=None, n_thin=None):
@@ -61,6 +110,8 @@ def make_posterior(star, sampler, modatm='odfnew', ref=None, n_burn=None, n_thin
     samples = sampler.chain[:, n_burn:, :].reshape((-1, 4))
     p = Posterior(star)
     for param in samples[::n_thin,:]:
-        p.save_step(param, ref=ref, modatm=modatm)
+        p.save_step(param)
+    p.calc_ab(ref=ref)
+    p.calc_isochrone()
     return p
     
