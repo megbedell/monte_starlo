@@ -99,7 +99,7 @@ class Posterior(q2.Star):
 
 
 
-def make_posterior(star, sampler, modatm='odfnew', ref=None, n_burn=None, n_thin=None):
+def make_posterior(star, sampler, n_burn=None, n_thin=None):
     """Takes a q2 Star object and an emcee sampler object
     Returns a Posterior object.
     """
@@ -108,10 +108,29 @@ def make_posterior(star, sampler, modatm='odfnew', ref=None, n_burn=None, n_thin
     if n_thin == None:
         n_thin = round(np.max(sampler.acor)) # default thinning: autocorrelation length
     samples = sampler.chain[:, n_burn:, :].reshape((-1, 4))
-    p = Posterior(star)
+    post = Posterior(star)
     for param in samples[::n_thin,:]:
-        p.save_step(param)
-    p.calc_ab(ref=ref)
-    p.calc_isochrone()
-    return p
+        post.save_step(param)
+    return post
     
+def abundance_err(post, species_ids=None, difab=False):
+    """Takes a Posterior object and prints statistics on abundances."""
+    if species_ids == None:
+        species_codes = sorted(set(post.linelist['species']))
+        species_ids = q2.abundances.getsp_ids(species_codes)
+    for sp in species_ids:
+        try:
+            ab = getattr(post, sp)['ab']
+        except AttributeError:
+            print "abundances have not been calculated for species {0}".format(sp)
+            continue
+        sp_ab = np.mean(ab, axis=1)  # species abundance at each step is the average of the lines
+        x = np.percentile(sp_ab, [16, 50, 84])
+        err_correct = 1.0  # edit this later to reflect number of lines used
+        print "{0}/H: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, x[1], (x[2]-x[1])/err_correct, (x[1]-x[0])/err_correct)
+        if difab:
+            diff = getattr(post, sp)['difab']
+            sp_diff = np.mean(diff, axis=1)
+            x = np.percentile(sp_diff, [16, 50, 84])
+            print "[{0}/H]: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, x[1], x[2]-x[1], x[1]-x[0])
+    return True
