@@ -95,6 +95,7 @@ class Posterior(q2.Star):
                     setattr(self, output, new)
                 else:
                     saved = np.vstack((saved,new))
+                    setattr(self, output, saved)
         return True
 
 

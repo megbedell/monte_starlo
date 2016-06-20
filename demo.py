@@ -85,13 +85,13 @@ if __name__ == "__main__":
     # save abundances:
     print "Calculating abundances..."
     start_time = time.time()
-    p.calc_ab(modatm=modatm,ref=ref)
+    post.calc_ab(modatm=modatm,ref=ref)
     print 'Abundances took {0:.2f} minutes'.format((time.time()-start_time)/60.0)
     
     # save isochrones:
     print "Calculating isochrones..."
     start_time = time.time()
-    p.calc_isochrone(feh_offset=-0.04) # offset improves solar age & mass values
+    post.calc_isochrone(feh_offset=-0.04) # offset improves solar age & mass values
     print 'Isochrones took {0:.2f} minutes'.format((time.time()-start_time)/60.0)
     
 
