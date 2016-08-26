@@ -102,7 +102,7 @@ class Posterior(q2.Star):
 
 def make_posterior(star, sampler, n_burn=None, n_thin=None):
     """Takes a q2 Star object and an emcee sampler object
-    Returns a Posterior object.
+    Returns a Posterior object with fundamental parameters.
     """
     if n_burn == None:
         n_burn = np.shape(sampler.chain)[1]/10  # default burn-in: 10% of chain length
@@ -133,5 +133,5 @@ def abundance_err(post, species_ids=None, difab=False):
             diff = getattr(post, sp)['difab']
             sp_diff = np.mean(diff, axis=1)
             x = np.percentile(sp_diff, [16, 50, 84])
-            print "[{0}/H]: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, x[1], x[2]-x[1], x[1]-x[0])
+            print "[{0}/H]: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, x[1], (x[2]-x[1])/err_correct, (x[1]-x[0])/err_correct)
     return True

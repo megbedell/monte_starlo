@@ -64,37 +64,41 @@ if __name__ == "__main__":
     # run mcmc:
     print "Starting MCMC..."
     start_time = time.time()
-    start_theta = np.array([star.teff, star.logg, star.feh, star.vt])
-    jump_theta = np.array([8.0,0.04,0.03,0.04])
+    start_theta = np.array([star.teff, star.logg, star.feh, star.vt])  # starting guess
+    jump_theta = np.array([8.0,0.04,0.03,0.04])  # guess on the errors
     n_theta = len(start_theta)
     n_walkers = 10
-    n_steps = 10000
+    n_steps = 5000
     verbose = False
-    pos = [start_theta + np.random.randn(n_theta)*jump_theta for i in range(n_walkers)]
-    sampler = emcee.EnsembleSampler(n_walkers, n_theta, mcmc.lnprob, args=[errors, star, ref], kwargs={"modatm":modatm, "verbose":verbose}, threads=2)
-    sampler.run_mcmc(pos, n_steps)
+    pos = [start_theta + np.random.randn(n_theta)*jump_theta for i in range(n_walkers)] # disperse the chains
+    sampler = emcee.EnsembleSampler(n_walkers, n_theta, mcmc.lnprob, \
+        args=[errors, star, ref], kwargs={"modatm":modatm, "verbose":verbose}, threads=5)
+    sampler.run_mcmc(pos, n_steps) #aaaaand go!
     plt.clf()
-    print 'MCMC took {0:.2f} minutes'.format((time.time()-start_time)/60.0)
+    print 'MCMC took {0:.2f} minutes with {1} walkers and {2} steps'.format( \
+        (time.time()-start_time)/60.0, n_walkers, n_steps)
     print 'auto-correlation lengths:', sampler.acor
     
+    # save some stuff to disk (just in case):
     pickle.dump(sampler.chain,open('emceechain_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
     pickle.dump(sampler.lnprobability,open('emceelike_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
 
+    # create a posterior object with parameters:
     post = posterior.make_posterior(star,sampler)
     
-    # save abundances:
+    # save abundances to posterior:
     print "Calculating abundances..."
     start_time = time.time()
     post.calc_ab(modatm=modatm,ref=ref)
     print 'Abundances took {0:.2f} minutes'.format((time.time()-start_time)/60.0)
     
-    # save isochrones:
+    # save isochrones to posterior:
     print "Calculating isochrones..."
     start_time = time.time()
     post.calc_isochrone(feh_offset=-0.04) # offset improves solar age & mass values
     print 'Isochrones took {0:.2f} minutes'.format((time.time()-start_time)/60.0)
     
-
+    # write some results to disk:
     pickle.dump(post,open('posterior_{0:s}-{1:s}.p'.format(starname, refname), 'wb'))
     
     n_burn = np.shape(sampler.chain)[1]/10  # default burn-in: 10% of chain length
@@ -102,6 +106,4 @@ if __name__ == "__main__":
     figure = corner.corner(samples, labels=["T$_{eff}$","log(g)","[Fe/H]","$v_t$"], show_titles=True)
     figure.savefig('pairsplot_{0:s}-{1:s}.png'.format(starname, refname))
     figure.clear()
-    
-    pdb.set_trace()
   
