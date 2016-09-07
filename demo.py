@@ -17,18 +17,17 @@ import time
 
 if __name__ == "__main__":
 
+    # using q2 to get set up with Star objects:
     starname = 'K11'
     refname = 'Sun'
     modatm = 'odfnew'  # choose the model grid
     data = q2.Data('K11_solution.csv', 'K11_lines.csv')
-    
-    # set up star objects:
     star = q2.Star(starname)
     ref = q2.Star(refname)
     star.get_data_from(data)
     ref.get_data_from(data)
 
-    # solve for best-fit parameters:
+    # solve for best-fit parameters with q2:
     sp = q2.specpars.SolvePars()
     sp.step_teff = 4
     sp.step_logg = 0.04
@@ -39,7 +38,8 @@ if __name__ == "__main__":
     q2.specpars.solve_one(star, sp, Ref=ref)
 
     print "Best-fit parameters:"
-    print "Teff  = {0:5.0f}, logg = {1:5.2f}, [Fe/H] = {2:5.3f}, vt = {3:5.2f}".format(star.teff, star.logg, star.feh, star.vt)
+    print "Teff  = {0:5.0f}, logg = {1:5.2f}, [Fe/H] = {2:5.3f}, vt = {3:5.2f}".\
+        format(star.teff, star.logg, star.feh, star.vt)
 
     # estimate errors from best-fit parameters:
     star.get_model_atmosphere(modatm)
@@ -57,11 +57,12 @@ if __name__ == "__main__":
       
     sig_Sep = np.copy(star.iron_stats['err_slope_ep'])
     sig_Srew = np.copy(star.iron_stats['err_slope_rew'])
-    sig_delFe = np.sqrt(star.iron_stats['err_afe1']**2/len(star.fe1['ab']) + star.iron_stats['err_afe2']**2/len(star.fe2['ab']))
+    sig_delFe = np.sqrt(star.iron_stats['err_afe1']**2/(len(star.fe1['ab'])) \
+        + star.iron_stats['err_afe2']**2/(len(star.fe2['ab'])))
     sig_Fe = star.iron_stats['err_afe1']/np.sqrt(len(star.fe1['ab']))
     errors = np.array([sig_Sep, sig_Srew, sig_delFe, sig_Fe])
     
-    # run mcmc:
+    # setup & run mcmc:
     print "Starting MCMC..."
     start_time = time.time()
     start_theta = np.array([star.teff, star.logg, star.feh, star.vt])  # starting guess
@@ -103,7 +104,8 @@ if __name__ == "__main__":
     
     n_burn = np.shape(sampler.chain)[1]/10  # default burn-in: 10% of chain length
     samples = sampler.chain[:, n_burn:, :].reshape((-1, 4))
-    figure = corner.corner(samples, labels=["T$_{eff}$","log(g)","[Fe/H]","$v_t$"], show_titles=True)
+    figure = corner.corner(samples, labels=["T$_{eff}$","log(g)","[Fe/H]","$v_t$"], \
+        show_titles=True)
     figure.savefig('pairsplot_{0:s}-{1:s}.png'.format(starname, refname))
     figure.clear()
   

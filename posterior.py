@@ -127,11 +127,31 @@ def abundance_err(post, species_ids=None, difab=False):
             continue
         sp_ab = np.mean(ab, axis=1)  # species abundance at each step is the average of the lines
         x = np.percentile(sp_ab, [16, 50, 84])
-        err_correct = 1.0  # edit this later to reflect number of lines used
-        print "{0}/H: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, x[1], (x[2]-x[1])/err_correct, (x[1]-x[0])/err_correct)
+        err_correct = np.sqrt(len(ab))  # standard error on the mean
+        print "{0}/H: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, \
+            x[1], (x[2]-x[1])/err_correct, (x[1]-x[0])/err_correct)
         if difab:
             diff = getattr(post, sp)['difab']
             sp_diff = np.mean(diff, axis=1)
             x = np.percentile(sp_diff, [16, 50, 84])
-            print "[{0}/H]: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, x[1], (x[2]-x[1])/err_correct, (x[1]-x[0])/err_correct)
+            err_correct = np.sqrt(len(diff))  # standard error on the mean
+            print "[{0}/H]: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, \
+                x[1], (x[2]-x[1])/err_correct, (x[1]-x[0])/err_correct)
+    return True
+    
+def tc_trend(post):
+    """Takes a Posterior object with abundances and outputs [X/H] vs. T_condensation 
+    best-fit param."""
+    
+    return True
+    
+    
+def tc_bootstrap(post, trials=10000):
+    """Takes a Posterior object with abundances AND isochrones, does a Grand Bootstrap*,
+    and adds the posterior distribution of Tc trend parameters to Posterior object.
+    
+    * where Grand Bootstrap is defined as randomizing over stellar parameters + stellar 
+    age, abundances (within line scatter), and galactic chemical evolution correction 
+    factors simultaneously."""
+    
     return True
