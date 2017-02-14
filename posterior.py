@@ -1,6 +1,6 @@
 import numpy as np
 from numpy import log, exp, pi, sqrt, sin, cos, tan, arctan
-from scipy.optimize import leastsq
+from scipy.optimize import leastsq, curve_fit
 import matplotlib.pyplot as plt
 import pickle
 import pdb
@@ -9,6 +9,7 @@ import emcee
 import q2
 import copy
 import multiprocessing as mp
+
 
 class Posterior(q2.Star):
     """This class is similar to q2.Star, except all parameters and
@@ -114,8 +115,9 @@ def make_posterior(star, sampler, n_burn=None, n_thin=None):
         post.save_step(param)
     return post
     
-def abundance_err(post, species_ids=None, difab=False):
-    """Takes a Posterior object and prints statistics on abundances."""
+def print_abundance(post, species_ids=None, print_ab=True, print_difab=False):
+    """Takes a Posterior object and prints statistics on elemental abundance(s)
+    with errors."""
     if species_ids == None:
         species_codes = sorted(set(post.linelist['species']))
         species_ids = q2.abundances.getsp_ids(species_codes)
@@ -125,33 +127,106 @@ def abundance_err(post, species_ids=None, difab=False):
         except AttributeError:
             print "abundances have not been calculated for species {0}".format(sp)
             continue
-        sp_ab = np.mean(ab, axis=1)  # species abundance at each step is the average of the lines
-        x = np.percentile(sp_ab, [16, 50, 84])
-        err_correct = np.sqrt(len(ab))  # standard error on the mean
-        print "{0}/H: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, \
-            x[1], (x[2]-x[1])/err_correct, (x[1]-x[0])/err_correct)
-        if difab:
-            diff = getattr(post, sp)['difab']
-            sp_diff = np.mean(diff, axis=1)
-            x = np.percentile(sp_diff, [16, 50, 84])
-            err_correct = np.sqrt(len(diff))  # standard error on the mean
-            print "[{0}/H]: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, \
+        if print_ab:
+            sp_ab = np.mean(ab, axis=1)  # species abundance at each step is the average of the lines
+            x = np.percentile(sp_ab, [16, 50, 84])
+            err_correct = np.sqrt(len(ab)*1.0)  # standard error on the mean
+            print "{0}/H: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, \
                 x[1], (x[2]-x[1])/err_correct, (x[1]-x[0])/err_correct)
+        if print_difab:
+            try:
+                diff = getattr(post, sp)['difab']
+                line_check = np.all(diff != np.array(None), axis=0) # check which lines have ref missing
+                diff = diff[:,line_check] # remove any bad lines
+                sp_diff = np.mean(diff, axis=1)
+                x = np.percentile(sp_diff, [16, 50, 84])
+                err_correct = np.sqrt(np.shape(diff)[1])  # standard error on the mean
+                print "[{0}/H]: {1:.3f} + {2:.3f} - {3:.3f}".format(sp, \
+                    x[1], (x[2]-x[1])/err_correct, (x[1]-x[0])/err_correct)
+            except:
+                print "No differential abundance available for {0}".format(sp)
     return True
     
-def tc_trend(post):
-    """Takes a Posterior object with abundances and outputs [X/H] vs. T_condensation 
-    best-fit param."""
+def linear(x, m, b):
+     model = m*x + b
+     return model
     
-    return True
+def tc_trend(abund, err=None, species_ids=[0], Tc=[0]):
+    """Takes a set of abundances and outputs [X/H] vs. T_condensation 
+    best-fit param (slope, intercept) as an array."""
+    if len(species_ids) != len(abund) and len(Tc) != len(abund):
+        print "Must input either species_ids or Tc for all elements to be fit"
+        return
+    if len(Tc) <= 1:
+        # fetch condensation temperatures for the elements to be fit
+        Tc = []
+        for species_id in species_ids:
+            Tc = np.append(Tc, q2.abundances.gettc(species_id))
+    if err == None:
+        popt, pcov = curve_fit(linear, Tc, abund) # fit without errors
+    else:
+        popt, pcov = curve_fit(linear, Tc, abund, sigma=err, absolute_sigma=True) # fit
+    return popt # (slope, intercept)
     
     
-def tc_bootstrap(post, trials=10000):
+def tc_bootstrap(post, trials=10000, species_ids=None, Ref_age=4.6, OI_override=[0.0,0.0]):
     """Takes a Posterior object with abundances AND isochrones, does a Grand Bootstrap*,
     and adds the posterior distribution of Tc trend parameters to Posterior object.
     
-    * where Grand Bootstrap is defined as randomizing over stellar parameters + stellar 
-    age, abundances (within line scatter), and galactic chemical evolution correction 
+    * where Grand Bootstrap is defined as randomizing over stellar parameters + resulting 
+    age/abundance and galactic chemical evolution correction 
     factors simultaneously."""
-    
+    if species_ids == None:
+        species_codes = sorted(set(post.linelist['species']))
+        species_ids = q2.abundances.getsp_ids(species_codes)
+    if getattr(post, species_ids[0])['ref'] != 'Sun' and Ref_age == 4.6:
+        print "WARNING: assuming that the reference star is solar age!"
+        print "If this is not true, set the Ref_age keyword accordingly."
+    tc_fit = {'age':np.empty(trials), 'slope':np.empty(trials), 'intercept':np.empty(trials)} # set up dict to store results
+    rand_ind = np.random.choice(len(post.isoage),size=trials) # random steps of posterior
+    for i,j in zip(range(trials),rand_ind):
+        age = post.isoage[j][0]
+        if age == None:
+            continue
+        abund = []
+        Tc = []
+        err = []
+        # generate GCE-corrected abundances for this step in posterior:
+        for species_id in species_ids:
+            if species_id == 'KI':
+                continue
+            # get elemental abundance
+            difab_all = getattr(post,species_id)['difab'][j]
+            difab_all = difab_all[difab_all != np.array(None)]
+            abund = np.append(abund, np.mean(difab_all)) # average over lines
+            err = np.append(err, np.std(difab_all)/sqrt(len(difab_all))) # standard error on mean
+            Tc = np.append(Tc, q2.abundances.gettc(species_id))
+            if (species_id == 'OI' and OI_override != [0.0,0.0]): # manually input NLTE-corrected oxygen
+                o_mean, o_sig = OI_override
+                abund[-1] = np.random.normal(o_mean, o_sig) # a lil randomization
+                err[-1] = o_sig
+            # apply GCE correction
+            (b, err_b) = q2.gce.getb_linear(species_id)
+            if b != 0.0: #check that there is a correction available
+                rand_b = np.random.normal(b,err_b) # assumes Gaussian error on GCE correction
+                abund[-1] -= (age - Ref_age)*rand_b # adjust abundance
+        for t in set(Tc):
+            # eliminate duplicate measurements of the same element
+            ind = np.where(Tc == t)[0]
+            if len(ind) == 2:  # won't take care of 3+ states of the same thing
+                (abund[ind[0]], err[ind[0]]) = np.average(abund[ind], weights=err[ind], returned=True)
+                abund = np.delete(abund, ind[1])
+                err = np.delete(err, ind[1])
+                Tc = np.delete(Tc, ind[1])
+                species_ids = np.delete(species_ids, ind[1])
+        # fit the trend
+        popt = tc_trend(abund, err=err, Tc=Tc)
+        # append result to tc_fit
+        tc_fit['age'][i] = age
+        tc_fit['slope'][i] = popt[0]
+        tc_fit['intercept'][i] = popt[1]
+    # save the results to the posterior object
+    post.tc_fit = tc_fit
+    x = np.percentile(post.tc_fit['slope'], [16, 50, 84])
+    print "Tc slope = {0:.2e} + {1:.2e} - {2:.2e}".format(x[1], (x[2]-x[1]), (x[1]-x[0]))
     return True
